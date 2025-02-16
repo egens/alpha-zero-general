@@ -1,8 +1,8 @@
 import numpy as np
 import random
 
-from .HiveDisplay import print_board, move_to_str
-from .HiveConstants import _encode_action
+from .HiveDisplay import print_board, move_to_str, _get_char
+from .HiveConstants import _encode_action, _decode_action
 
 class RandomPlayer():
     def __init__(self, game):
@@ -19,57 +19,29 @@ class HumanPlayer():
     def __init__(self, game):
         self.game = game
 
-    def show_all_moves(self, valid):
-        print('  ', end='')
-        for worker in range(2):
-            print(f'Move w{worker+1} '  , end='')
-            for d in directions_char:
-                print(f'{d}   ', end='')
-            print('   ', end='')
-        print()
-        
-        for build_i, build_direction in enumerate(directions_char):
-            print(f'Build {build_direction}: ', end='')
-            for worker in range(2):
-                for move_i, move_direction in enumerate(directions_char):
-                    action = _encode_action(worker, 0, move_i, build_i)
-                    if valid[action]:
-                        print(f'{action:3d} ', end='')
-                    else:
-                        print('    ', end='')
-                print(' '*11, end='')
-            print() 
+    def show_moves(self, moves):
+        for a, valid in enumerate(moves):
+            if valid:
+                piece, new_q, new_r = _decode_action(a)
+                print(a, _get_char(piece), new_q, new_r)
 
     def play(self, board, nb_moves):
         # print_board(self.game.board)
-        game_started = (np.abs(self.game.board.workers).sum() == 6) # check if all workers are set
         valid = self.game.getValidMoves(board, 0)
         print()
         print('='*80)
-        if game_started:
-            self.show_all_moves(valid)
-        else:
-            print('Type coordinates for your worker (y then x). For example type "0 0" for upper left corner')
+        self.show_moves(valid)
         print('*'*80)
         while True:
-            input_move = input()
-            if input_move == '+':
-                if game_started:
-                    self.show_all_moves(valid)
-            else:
-                try:
-                    if game_started:
-                        a = int(input_move)
-                    else:
-                        coordinates = [int(x) for x in input_move.split()]
-                        a = 5*coordinates[0] + coordinates[1]
-                    if not valid[a]:
-                        raise Exception('')
-                    break
-                except:
-                    print('Invalid move:', input_move)
+            input_move = input('Select move ')
+            try:
+                a = int(input_move)
+                if not valid[a]:
+                    raise Exception('')
+                break
+            except:
+                print('Invalid move:', input_move)
         return a
-
 
 class GreedyPlayer():
     pass
