@@ -4,19 +4,21 @@ import numpy as np
 BOARD_SIZE = 15
 
 PIECE_TYPES_NUM = 2
-PLAYER_PIECES_COUNT = 10
+PLAYER_PIECES_COUNT = 11
 PASS_ACTION = PLAYER_PIECES_COUNT*BOARD_SIZE*BOARD_SIZE
 
 QUEEN = 0
 ANT_1 = 1
 ANT_2 = 2
 ANT_3 = 3
-BEETLE_1 = 4
-BEETLE_2 = 5
-BEETLE_3 = 6
-GRASSHOPPER_1 = 7
-GRASSHOPPER_2 = 8
-GRASSHOPPER_3 = 9
+GRASSHOPPER_1 = 4
+GRASSHOPPER_2 = 5
+GRASSHOPPER_3 = 6
+BEETLE_1 = 7
+BEETLE_2 = 8
+
+SPIDER_1 = 9
+SPIDER_2 = 10
 
 @njit(cache=True, fastmath=True, nogil=True)
 def _is_queen(p):
@@ -29,14 +31,19 @@ def _is_ant(p):
 	return n == 1 or n == 2 or n == 3
 
 @njit(cache=True, fastmath=True, nogil=True)
-def _is_beetle(p):
+def _is_grasshopper(p):
 	n = p % PLAYER_PIECES_COUNT
 	return n == 4 or n == 5 or n == 6
 
 @njit(cache=True, fastmath=True, nogil=True)
-def _is_grasshopper(p):
+def _is_beetle(p):
 	n = p % PLAYER_PIECES_COUNT
-	return n == 7 or n == 8 or n == 9
+	return n == 7 or n == 8
+
+@njit(cache=True, fastmath=True, nogil=True)
+def _is_spider(p):
+	n = p % PLAYER_PIECES_COUNT
+	return n == 9 or n == 10
 
 # SPIDER
 # GRASSHOPPER
