@@ -36,7 +36,7 @@ def _print_main(board):
 				c = f'{Fore.BLACK}. {Style.RESET_ALL}'
 			else:
 				c = f'{Fore.BLUE}. {Style.RESET_ALL}'
-			for piece, coord in enumerate(board.state[:-1]):
+			for piece, coord in enumerate(board.positions[:-1]):
 				if coord[0] == q and coord[1] == r:
 					c = _get_char(piece)
 			l += f'{c}'
@@ -123,7 +123,7 @@ def _print_moves(board, actions=None):
 
 def _print_hands(board):
 	l = 'Player hands: '
-	for piece, coord in enumerate(board.state[:-1]):
+	for piece, coord in enumerate(board.positions[:-1]):
 		if coord[0] + coord[1] == 0:
 			l += f'{_get_char(piece)} '
 	print(l)

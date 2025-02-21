@@ -79,16 +79,17 @@ def observation_size():
 def action_size():
 	return MOVES_COUNT
 
-spec = [
-	('state'      , numba.int8[:,:]),
-	('pieces'     , numba.bool_[:,:]),
-	('round_num'  , numba.int8[:]),
-	('beetle_height'  , numba.int8[:]),
-]
-@numba.experimental.jitclass(spec)
+# spec = [
+# 	('state'      , numba.int8[:,:]),
+# 	('positions'  , numba.int8[:,:]),
+# 	('pieces'     , numba.bool_[:,:]),
+# 	('round_num'  , numba.int8[:]),
+# 	('beetle_height'  , numba.int8[:]),
+# ]
+# @numba.experimental.jitclass(spec)
 class Board():
 	def __init__(self, num_players):
-		self.state = np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8) # QR coordinates
+		self.state = np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8) - 1 # Graph
 		self.init_game()
 
 	def get_score(self, player):
@@ -99,7 +100,8 @@ class Board():
 	def init_game(self):
 		self.copy_state(np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8), copy_or_not=False)
 
-		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.bool_)
+		self.positions = np.zeros((2*PLAYER_PIECES_COUNT, 2), dtype=np.int8) - 1
+		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8) - 1
 		self.round_num = np.zeros(2, dtype=np.int8)
 		self.beetle_height = np.zeros(4, dtype=np.int8)
 
@@ -133,7 +135,7 @@ class Board():
 		g_spawn_shown = False
 		s_spawn_shown = False
 		for piece in player_pieces:
-			moves = [self.state[0]]
+			moves = [self.positions[0]]
 			moves.pop()
 			if self._piece_in_hand(piece):
 				# Pieces should spawn in their order
@@ -156,14 +158,14 @@ class Board():
 				moves += self._get_spawns(player)
 
 			else: # Piece in play
-				if cutpoints[self.state[piece][0], self.state[piece][1]]:
+				if cutpoints[self.positions[piece][0], self.positions[piece][1]]:
 					continue
 				# if self._beetle_above(piece):
 				# 	continue
 				if self._queen_in_hand(player):
 					continue
 				if _is_queen(piece) or _is_beetle(piece):
-					surr = self._get_surroundings(self.state[piece][0], self.state[piece][1])
+					surr = self._get_surroundings(self.positions[piece][0], self.positions[piece][1])
 					for i in range(6):
 						if self._is_piece(surr[i][0], surr[i][1]):
 							continue
@@ -175,13 +177,13 @@ class Board():
 							moves += [np.array([surr[i][0], surr[i][1]], dtype=np.int8)]
 				# # Move beetles up
 				# if _is_beetle(piece):
-				# 	for s in self._get_surrounding_pieces(self.state[piece][0], self.state[piece][1]):
+				# 	for s in self._get_surrounding_pieces(self.positions[piece][0], self.positions[piece][1]):
 				# 		q, r = s
 				# 		moves += [np.array([q, r], dtype=np.int8)]
 				elif _is_ant(piece):
 					moves += self._get_ant_moves(piece)
 				elif _is_grasshopper(piece):
-					coord = self.state[piece]
+					coord = self.positions[piece]
 					for d in DIRECTIONS:
 						if self._is_piece(coord[0] + d[0], coord[1] + d[1]):
 							for i in range(1, BOARD_SIZE):
@@ -209,14 +211,14 @@ class Board():
 		for enemy_piece in self._get_player_pieces(self._get_opponent(player)):
 			if self._piece_in_hand(enemy_piece):
 				continue
-			q, r = self.state[enemy_piece]
+			q, r = self.positions[enemy_piece]
 			enemies[q, r] = True
-		player_perimeter = [self.state[0]]
+		player_perimeter = [self.positions[0]]
 		player_perimeter.pop()
 		for piece in self._get_player_pieces(player):
 			if self._piece_in_hand(piece):
 				continue
-			q, r = self.state[piece]
+			q, r = self.positions[piece]
 			for s in self._get_surroundings(q, r):
 				q1, r1 = s
 				if not self._is_board(q1, r1) or self._is_piece(q1, r1) or visited[q1, r1]:
@@ -224,7 +226,7 @@ class Board():
 				player_perimeter += [s]
 				visited[q1, r1] = True
 
-		spawns = [self.state[0]]
+		spawns = [self.positions[0]]
 		spawns.pop()
 		for potential_spawn in player_perimeter:
 			q, r = potential_spawn
@@ -243,11 +245,11 @@ class Board():
 	def _get_ant_moves(self, piece, steps=-1):
 		visited = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.bool_)
 		depth = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8)
-		moves = [self.state[0]]
+		moves = [self.positions[0]]
 		moves.pop()
-		stack = [self.state[piece]]
-		q, r = self.state[piece]
-		self.pieces[q, r] = False
+		stack = [self.positions[piece]]
+		q, r = self.positions[piece]
+		self.pieces[q, r] = - 1
 		while len(stack) > 0:
 			q, r = stack.pop()
 			visited[q, r] = True
@@ -271,8 +273,8 @@ class Board():
 							moves += [surr[i]]
 						else:
 							stack += [surr[i]]
-		q, r = self.state[piece]
-		self.pieces[q, r] = True
+		q, r = self.positions[piece]
+		self.pieces[q, r] = piece
 		return moves
 
 	def make_move(self, move, player, random_seed):
@@ -289,15 +291,35 @@ class Board():
 			to_piece = to_piece + PLAYER_PIECES_COUNT
 		if not is_opponent_piece and player == 1:
 			to_piece = to_piece + PLAYER_PIECES_COUNT
-		q, r = self.state[piece]
-		self.pieces[q, r] = False
-		new_q, new_r = self.state[to_piece] + DIRECTIONS[direction]
+		q, r = self.positions[piece]
+		self.pieces[q, r] = - 1
+		new_q, new_r = self.positions[to_piece] + DIRECTIONS[direction]
 		# First move override
 		if to_piece == piece:
 			new_q, new_r = BOARD_SIZE//2, BOARD_SIZE//2
-		self.state[piece] = [new_q, new_r]
+
+		# Find head of graph
+		self.state = np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8) - 1
+		stack = []
+		for i in range(PLAYER_PIECES_COUNT):
+			if self._piece_in_play(i):
+				self.state[i] = [i, 0]
+				stack = [self.positions[self.state[i][0]]]
+				break
+		while len(stack) > 0:
+			s = stack.pop()
+			q, r = s
+			parent = self.pieces[q, r]
+			for i, d in enumerate(DIRECTIONS):
+				q1, r1 = s + d
+				child = self.pieces[q1, r1]
+				if child >= 0 and self.state[child][0] == -1:
+					stack += [[q1, r1]]
+					self.state[child] = [parent, (i + 3) % 6]
+		# print(self.state)
 		# self._check_state()
-		self.pieces[new_q, new_r] = True
+		self.pieces[new_q, new_r] = piece
+		self.positions[piece] = [new_q, new_r]
 		# if self.pieces[new_q, new_r] == True:
 		# 	pass
 		# 	# TODO going above the hive
@@ -308,15 +330,17 @@ class Board():
 		# Ideally game should be over earlier
 		if self.round_num[0] > 1000:
 			return np.array([0.1, 0.1], dtype=np.float32)
-		cur_player_queen = self.state[self._get_player_pieces(self._get_opponent(next_player))[0]]
+		if self._queen_in_hand(0) or self._queen_in_hand(1):
+			return np.array([0, 0], dtype=np.float32)
+		cur_player_queen = self.positions[self._get_player_pieces(self._get_opponent(next_player))[0]]
 		cur_player_health = 6
 		for queen_surroundings in self._get_surroundings(cur_player_queen[0], cur_player_queen[1]):
-			if self.pieces[queen_surroundings[0], queen_surroundings[1]]:
+			if self.pieces[queen_surroundings[0], queen_surroundings[1]] >= 0:
 				cur_player_health -= 1
-		next_player_queen = self.state[self._get_player_pieces(next_player)[0]]
+		next_player_queen = self.positions[self._get_player_pieces(next_player)[0]]
 		next_player_health = 6
 		for queen_surroundings in self._get_surroundings(next_player_queen[0], next_player_queen[1]):
-			if self.pieces[queen_surroundings[0], queen_surroundings[1]]:
+			if self.pieces[queen_surroundings[0], queen_surroundings[1]] >= 0:
 				next_player_health -= 1
 		if cur_player_health == 0 and next_player_health == 0:
 			np.array([0.1, 0.1], dtype=np.float32)
@@ -339,8 +363,14 @@ class Board():
 		new_state = self.state.copy()
 		for i in range(PLAYER_PIECES_COUNT):
 			new_state[i] = self.state[PLAYER_PIECES_COUNT + i]
+			if self._piece_in_play(PLAYER_PIECES_COUNT + i):
+				new_state[i] = (new_state[i] + PLAYER_PIECES_COUNT) % PLAYER_PIECES_COUNT
 			new_state[PLAYER_PIECES_COUNT + i] = self.state[i]
+			if self._piece_in_play(i):
+				new_state[PLAYER_PIECES_COUNT + i] = (new_state[PLAYER_PIECES_COUNT + i] + PLAYER_PIECES_COUNT) % PLAYER_PIECES_COUNT
 		self.state = new_state
+		self.positions[:PLAYER_PIECES_COUNT], self.positions[PLAYER_PIECES_COUNT:] = self.positions[PLAYER_PIECES_COUNT:], self.positions[:PLAYER_PIECES_COUNT]
+		self.pieces = (self.pieces + PLAYER_PIECES_COUNT) % PLAYER_PIECES_COUNT
 
 	def get_symmetries(self, policy, valid_actions):
 		symmetries = [(self.state.copy(), policy.copy(), valid_actions.copy())]
@@ -364,12 +394,24 @@ class Board():
 			return
 		self.state = state.copy() if copy_or_not else state
 
-		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.bool_)
-		for i, qr in enumerate(self.state[:-1]):
+		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8)
+		self.positions = np.zeros((2*PLAYER_PIECES_COUNT, 2), dtype=np.int8) - 1
+		for i, parent_direction in enumerate(self.state[:-1]):
 			if self._piece_in_play(i):
-				self.pieces[qr[0], qr[1]] = True
+				self.pieces[self.positions[i][0], self.positions[i][1]] = i
+		has_unprocessed = False
+		while has_unprocessed:
+			for i, parent_direction in enumerate(self.state[:-1]):
+				if self._piece_in_hand(i):
+					continue
+				if parent_direction[0] == i:
+					self.positions[i] = [BOARD_SIZE//2, BOARD_SIZE//2]
+					continue
+				if self.positions[parent_direction[0]] == -1:
+					has_unprocessed = True
+				self.positions[i] = self.positions[parent_direction[0]] + DIRECTIONS[parent_direction[1]]
 		self.round_num = self.state[-1,:]
-	# self.beetle_height = [self.state[-3,0], self.state[-3,1], self.state[-2,0], self.state[-2,1]]
+		# self.beetle_height = [self.state[-3,0], self.state[-3,1], self.state[-2,0], self.state[-2,1]]
 
 	def _is_piece(self, q, r):
 		return self._is_board(q, r) and self.pieces[q, r]
@@ -379,7 +421,7 @@ class Board():
 
 	def _get_bug_position(self, searched_bug):
 		for i in np.ndindex(BOARD_SIZE, BOARD_SIZE):
-			if self.state[i] == searched_bug:
+			if self.positions[i] == searched_bug:
 				return i
 		print(f'Should not happen gwp {searched_bug}')
 		return (-1, -1)
@@ -399,7 +441,7 @@ class Board():
 		count = 0
 		for i, coord in enumerate(surrs):
 			q1, r1 = coord
-			if self._is_board(q1, r1) and self.pieces[q1, r1]:
+			if self._is_board(q1, r1) and self.pieces[q1, r1] >= 0:
 				idxs[count] = i
 				count += 1
 		return surrs[idxs[:count]]
@@ -415,7 +457,7 @@ class Board():
 		return not self._piece_in_hand(piece)
 
 	def _piece_in_hand(self, piece):
-		return self.state[piece][0] == 0 and self.state[piece][1] == 0
+		return self.state[piece][0] == -1 and self.state[piece][1] == -1
 
 	# Find pieces blocked by one hive rule
 	# https://en.wikipedia.org/wiki/Biconnected_component
@@ -433,11 +475,11 @@ class Board():
 		root_child_count = 0
 
 		# Find one piece in play and start search from its pos
-		stack = [self.state[0]]
+		stack = [self.positions[0]]
 		stack.pop()
 		for p in range(2*PLAYER_PIECES_COUNT):
 			if self._piece_in_play(p):
-				stack = [self.state[p]]
+				stack = [self.positions[p]]
 				q, r = stack[-1]
 				status[q, r] = VISITING
 				break
@@ -508,17 +550,17 @@ class Board():
 
 	def _near_opponent_queen(self, player, q, r):
 		queen = self._get_player_pieces(self._get_opponent(player))[0]
-		q1, r1 = self.state[queen]
+		q1, r1 = self.positions[queen]
 		if q1 + r1 == 0:
 			return False
 		return abs(q - q1) + abs(r - r1) == 1
 
 	def _closer_to_opponent_queen(self, player, piece, new_q, new_r):
 		queen = self._get_player_pieces(self._get_opponent(player))[0]
-		q1, r1 = self.state[queen]
+		q1, r1 = self.positions[queen]
 		if q1 + r1 == 0:
 			return False
-		q, r = self.state[piece]
+		q, r = self.positions[piece]
 		return self.__distance(new_q, new_r, q1, r1) < self.__distance(q, r, q1, r1)
 
 	def __distance(self, q1, r1, q2, r2):
@@ -532,17 +574,15 @@ class Board():
 	def _get_first_adj_piece(self, player, piece, q, r):
 		for i, d in enumerate(DIRECTIONS):
 			q1, r1 = q + d[0], r + d[1]
-			for p, s in enumerate(self.state):
-				if p == piece + player * PLAYER_PIECES_COUNT:
-					continue
-				if q1 == s[0] and r1 == s[1]:
-					return p, (i + 3) % 6
+			p = self.pieces[q1, r1]
+			if p >= 0 and p != piece + player * PLAYER_PIECES_COUNT:
+				return p, (i + 3) % 6
 		raise Exception(f'{q,r} should have adjacent piece')
 
 	def _check_state(self):
-		for i, s1 in enumerate(self.state[:-1]):
-			for j, s2 in enumerate(self.state[:-1]):
+		for i, s1 in enumerate(self.positions[:-1]):
+			for j, s2 in enumerate(self.positions[:-1]):
 				if i == j: continue
 				if np.all(s1 == s2) and sum(s1) + sum(s2) != 0:
-					print(self.state, s1, s2)
+					print(self.positions, s1, s2)
 					raise Exception('WRONG STATE')
