@@ -306,7 +306,7 @@ class Board():
 
 	def check_end_game(self, next_player):
 		# Ideally game should be over earlier
-		if self.round_num[0] > 1000:
+		if self.get_round() > 1000:
 			return np.array([0.1, 0.1], dtype=np.float32)
 		cur_player_queen = self.state[self._get_player_pieces(self._get_opponent(next_player))[0]]
 		cur_player_health = 6
@@ -344,7 +344,7 @@ class Board():
 
 	def get_symmetries(self, policy, valid_actions):
 		symmetries = [(self.state.copy(), policy.copy(), valid_actions.copy())]
-		print(policy[np.where(policy > 0)])
+		# print(policy[np.where(policy > 0)])
 		# TODO Implement Hive
 
 		return symmetries
