@@ -81,7 +81,10 @@ def action_size():
 
 # spec = [
 # 	('state'      , numba.int8[:,:]),
+<<<<<<< Updated upstream
 # 	('positions'  , numba.int8[:,:]),
+=======
+>>>>>>> Stashed changes
 # 	('pieces'     , numba.bool_[:,:]),
 # 	('round_num'  , numba.int8[:]),
 # 	('beetle_height'  , numba.int8[:]),
@@ -98,11 +101,15 @@ class Board():
 		return 0
 
 	def init_game(self):
-		self.copy_state(np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8), copy_or_not=False)
+		self.copy_state(np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8) - 1, copy_or_not=False)
 
 		self.positions = np.zeros((2*PLAYER_PIECES_COUNT, 2), dtype=np.int8) - 1
 		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8) - 1
-		self.round_num = np.zeros(2, dtype=np.int8)
+		for row in self.pieces_graph:
+			row[0] = -1
+			row[1] = -1
+		self.round_num[0] = 0
+		self.round_num[1] = 0
 		self.beetle_height = np.zeros(4, dtype=np.int8)
 
 	def get_state(self):
@@ -134,6 +141,7 @@ class Board():
 		b_spawn_shown = False
 		g_spawn_shown = False
 		s_spawn_shown = False
+		spawns = self._get_spawns(player)
 		for piece in player_pieces:
 			moves = [self.positions[0]]
 			moves.pop()
@@ -155,7 +163,7 @@ class Board():
 					if s_spawn_shown:
 						continue
 					s_spawn_shown = True
-				moves += self._get_spawns(player)
+				moves += spawns
 
 			else: # Piece in play
 				if cutpoints[self.positions[piece][0], self.positions[piece][1]]:
@@ -297,15 +305,20 @@ class Board():
 		# First move override
 		if to_piece == piece:
 			new_q, new_r = BOARD_SIZE//2, BOARD_SIZE//2
+			self.state[piece] = [piece, 0]
+		self.pieces[new_q, new_r] = piece
+		self.positions[piece] = [new_q, new_r]
 
 		# Find head of graph
-		self.state = np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8) - 1
 		stack = []
 		for i in range(PLAYER_PIECES_COUNT):
 			if self._piece_in_play(i):
+				# TODO to self.pieces_graph
+				self.state[:-1] = np.zeros((2*PLAYER_PIECES_COUNT,2), dtype=np.int8) - 1
 				self.state[i] = [i, 0]
 				stack = [self.positions[self.state[i][0]]]
 				break
+		print(self.state)
 		while len(stack) > 0:
 			s = stack.pop()
 			q, r = s
@@ -316,10 +329,10 @@ class Board():
 				if child >= 0 and self.state[child][0] == -1:
 					stack += [[q1, r1]]
 					self.state[child] = [parent, (i + 3) % 6]
-		# print(self.state)
+		print(self.state)
+		# TODO Debug state error
 		# self._check_state()
-		self.pieces[new_q, new_r] = piece
-		self.positions[piece] = [new_q, new_r]
+
 		# if self.pieces[new_q, new_r] == True:
 		# 	pass
 		# 	# TODO going above the hive
@@ -369,12 +382,16 @@ class Board():
 			if self._piece_in_play(i):
 				new_state[PLAYER_PIECES_COUNT + i] = (new_state[PLAYER_PIECES_COUNT + i] + PLAYER_PIECES_COUNT) % PLAYER_PIECES_COUNT
 		self.state = new_state
-		self.positions[:PLAYER_PIECES_COUNT], self.positions[PLAYER_PIECES_COUNT:] = self.positions[PLAYER_PIECES_COUNT:], self.positions[:PLAYER_PIECES_COUNT]
-		self.pieces = (self.pieces + PLAYER_PIECES_COUNT) % PLAYER_PIECES_COUNT
+		pc = self.positions.copy()
+		self.positions[:PLAYER_PIECES_COUNT], self.positions[PLAYER_PIECES_COUNT:] = pc[PLAYER_PIECES_COUNT:], pc[:PLAYER_PIECES_COUNT]
+		for piece, pos in enumerate(self.positions):
+			if self._piece_in_play(piece):
+				q, r = pos
+				self.pieces[q, r] = piece # Positions already swapped
 
 	def get_symmetries(self, policy, valid_actions):
 		symmetries = [(self.state.copy(), policy.copy(), valid_actions.copy())]
-		print(policy[np.where(policy > 0)])
+		# print(policy[np.where(policy > 0)])
 		# TODO Implement Hive
 
 		return symmetries
@@ -394,27 +411,34 @@ class Board():
 			return
 		self.state = state.copy() if copy_or_not else state
 
-		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8)
-		self.positions = np.zeros((2*PLAYER_PIECES_COUNT, 2), dtype=np.int8) - 1
-		for i, parent_direction in enumerate(self.state[:-1]):
-			if self._piece_in_play(i):
-				self.pieces[self.positions[i][0], self.positions[i][1]] = i
-		has_unprocessed = False
-		while has_unprocessed:
-			for i, parent_direction in enumerate(self.state[:-1]):
-				if self._piece_in_hand(i):
-					continue
-				if parent_direction[0] == i:
-					self.positions[i] = [BOARD_SIZE//2, BOARD_SIZE//2]
-					continue
-				if self.positions[parent_direction[0]] == -1:
-					has_unprocessed = True
-				self.positions[i] = self.positions[parent_direction[0]] + DIRECTIONS[parent_direction[1]]
 		self.round_num = self.state[-1,:]
+		self.pieces_graph = self.state[:-1,:]
+		if np.all(self.pieces_graph == -1):
+			return
+
+		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8) - 1
+		self.positions = np.zeros((2*PLAYER_PIECES_COUNT, 2), dtype=np.int8) - 1
+		has_unprocessed = True
+		while has_unprocessed:
+			has_unprocessed = False
+			for piece, pd in enumerate(self.pieces_graph):
+				parent, parent_direction = pd
+				if self._piece_in_hand(piece):
+					continue
+				if parent == piece:
+					self.positions[piece] = [BOARD_SIZE//2, BOARD_SIZE//2]
+					self.pieces[BOARD_SIZE//2, BOARD_SIZE//2] = piece
+					continue
+				if self.positions[parent][0] == -1:
+					has_unprocessed = True
+					continue
+				self.positions[piece] = self.positions[parent] + DIRECTIONS[parent_direction]
+				q, r = self.positions[piece]
+				self.pieces[q, r] = piece
 		# self.beetle_height = [self.state[-3,0], self.state[-3,1], self.state[-2,0], self.state[-2,1]]
 
 	def _is_piece(self, q, r):
-		return self._is_board(q, r) and self.pieces[q, r]
+		return self._is_board(q, r) and self.pieces[q, r] >= 0
 
 	def _is_board(self, q, r):
 		return 0 <= q < BOARD_SIZE and 0 <= r < BOARD_SIZE

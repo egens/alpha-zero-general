@@ -94,13 +94,13 @@ def _print_flags(board):
 	for r in range(BOARD_SIZE):
 		l = ''
 		for q in range(BOARD_SIZE):
-			if board.pieces[q, r]:
+			if board.pieces[q, r] >= 0:
 				if board._get_cutpoints()[q, r]:
 					l += f'C '
 				else:
 					l += f'* '
-			# elif spawns[q, r]:
-			# 	l += f's '
+			elif spawns[q, r]:
+				l += f's '
 			else:
 				l += f'. '
 		print(r * ' ' + l)
@@ -132,5 +132,5 @@ def print_board(board):
 	print()
 	_print_flags(board)
 	_print_hands(board)
-	# _print_moves(board)
+	_print_moves(board)
 	_print_main(board)
