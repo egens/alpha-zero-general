@@ -5,7 +5,8 @@ BOARD_SIZE = 15
 
 PIECE_TYPES_NUM = 2
 PLAYER_PIECES_COUNT = 11
-PASS_ACTION = PLAYER_PIECES_COUNT*BOARD_SIZE*BOARD_SIZE
+PASS_ACTION = PLAYER_PIECES_COUNT*PLAYER_PIECES_COUNT*6*2
+MOVES_COUNT = PASS_ACTION + 1
 
 QUEEN = 0
 ANT_1 = 1
@@ -19,6 +20,13 @@ BEETLE_2 = 8
 
 SPIDER_1 = 9
 SPIDER_2 = 10
+
+# Directions
+#   5 \ / 0
+#  4 - P - 1
+#   3 / \ 2
+DIRECTIONS = np.array([[1, -1], [1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1]], dtype=np.int8)
+DIRECTIONS_STRING = '/-\\/-\\'
 
 @njit(cache=True, fastmath=True, nogil=True)
 def _is_queen(p):
@@ -51,16 +59,35 @@ def _is_spider(p):
 # MOSQITO
 # PILLBUG
 
+# Move to piece actions
 @njit(cache=True, fastmath=True, nogil=True)
 def _decode_action(action):
-	new_q, action_ = divmod(action, BOARD_SIZE*PLAYER_PIECES_COUNT)
-	new_r, piece = divmod(action_, PLAYER_PIECES_COUNT)
-	return piece, new_q, new_r
+	piece, action_ = divmod(action, PLAYER_PIECES_COUNT*6*2)
+	to_piece, action_ = divmod(action_, 6*2)
+	direction, is_opponent_piece = divmod(action_, 2)
+	return piece, to_piece, direction, is_opponent_piece
 
 @njit(cache=True, fastmath=True, nogil=True)
-def _encode_action(piece, new_q, new_r):
-	action = BOARD_SIZE*PLAYER_PIECES_COUNT*new_q + PLAYER_PIECES_COUNT*new_r + piece
+def _encode_action(piece, to_piece, direction):
+	piece_player = piece < PLAYER_PIECES_COUNT
+	to_piece_player = to_piece < PLAYER_PIECES_COUNT
+	is_opponent_piece = piece_player != to_piece_player
+	piece = piece % PLAYER_PIECES_COUNT
+	to_piece = to_piece % PLAYER_PIECES_COUNT
+	action = PLAYER_PIECES_COUNT*6*2*piece + 6*2*to_piece + 2*direction + is_opponent_piece
 	return action
+
+# Q-R actions
+# @njit(cache=True, fastmath=True, nogil=True)
+# def _decode_action(action):
+# 	new_q, action_ = divmod(action, BOARD_SIZE*PLAYER_PIECES_COUNT)
+# 	new_r, piece = divmod(action_, PLAYER_PIECES_COUNT)
+# 	return piece, new_q, new_r
+#
+# @njit(cache=True, fastmath=True, nogil=True)
+# def _encode_action(piece, new_q, new_r):
+# 	action = BOARD_SIZE*PLAYER_PIECES_COUNT*new_q + PLAYER_PIECES_COUNT*new_r + piece
+# 	return action
 
 # https://stackoverflow.com/a/65622029/1488538
 @njit(cache=True)
