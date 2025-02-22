@@ -310,14 +310,12 @@ class Board():
 			return np.array([0.1, 0.1], dtype=np.float32)
 		cur_player_queen = self.state[self._get_player_pieces(self._get_opponent(next_player))[0]]
 		cur_player_health = 6
-		for queen_surroundings in self._get_surroundings(cur_player_queen[0], cur_player_queen[1]):
-			if self.pieces[queen_surroundings[0], queen_surroundings[1]]:
-				cur_player_health -= 1
+		for d in DIRECTIONS:
+			cur_player_health -= self.pieces[cur_player_queen[0] + d[0], cur_player_queen[1] + d[1]]
 		next_player_queen = self.state[self._get_player_pieces(next_player)[0]]
 		next_player_health = 6
-		for queen_surroundings in self._get_surroundings(next_player_queen[0], next_player_queen[1]):
-			if self.pieces[queen_surroundings[0], queen_surroundings[1]]:
-				next_player_health -= 1
+		for d in DIRECTIONS:
+			next_player_health -= self.pieces[next_player_queen[0] + d[0], next_player_queen[1] + d[1]]
 		if cur_player_health == 0 and next_player_health == 0:
 			np.array([0.1, 0.1], dtype=np.float32)
 		if next_player_health == 0:
@@ -532,7 +530,7 @@ class Board():
 	def _get_first_adj_piece(self, player, piece, q, r):
 		for i, d in enumerate(DIRECTIONS):
 			q1, r1 = q + d[0], r + d[1]
-			for p, s in enumerate(self.state):
+			for p, s in enumerate(self.state[:-1]):
 				if p == piece + player * PLAYER_PIECES_COUNT:
 					continue
 				if q1 == s[0] and r1 == s[1]:

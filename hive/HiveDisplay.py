@@ -132,5 +132,5 @@ def print_board(board):
 	print()
 	_print_flags(board)
 	_print_hands(board)
-	# _print_moves(board)
+	_print_moves(board)
 	_print_main(board)
