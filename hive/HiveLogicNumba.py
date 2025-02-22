@@ -81,10 +81,7 @@ def action_size():
 
 # spec = [
 # 	('state'      , numba.int8[:,:]),
-<<<<<<< Updated upstream
 # 	('positions'  , numba.int8[:,:]),
-=======
->>>>>>> Stashed changes
 # 	('pieces'     , numba.bool_[:,:]),
 # 	('round_num'  , numba.int8[:]),
 # 	('beetle_height'  , numba.int8[:]),
@@ -341,19 +338,19 @@ class Board():
 
 	def check_end_game(self, next_player):
 		# Ideally game should be over earlier
-		if self.round_num[0] > 1000:
+		if self.get_round() > 1000:
 			return np.array([0.1, 0.1], dtype=np.float32)
 		if self._queen_in_hand(0) or self._queen_in_hand(1):
 			return np.array([0, 0], dtype=np.float32)
 		cur_player_queen = self.positions[self._get_player_pieces(self._get_opponent(next_player))[0]]
 		cur_player_health = 6
-		for queen_surroundings in self._get_surroundings(cur_player_queen[0], cur_player_queen[1]):
-			if self.pieces[queen_surroundings[0], queen_surroundings[1]] >= 0:
+		for d in DIRECTIONS:
+			if self.pieces[cur_player_queen[0] + d[0], cur_player_queen[1] + d[1]] >= 0:
 				cur_player_health -= 1
 		next_player_queen = self.positions[self._get_player_pieces(next_player)[0]]
 		next_player_health = 6
-		for queen_surroundings in self._get_surroundings(next_player_queen[0], next_player_queen[1]):
-			if self.pieces[queen_surroundings[0], queen_surroundings[1]] >= 0:
+		for d in DIRECTIONS:
+			if self.pieces[next_player_queen[0] + d[0], next_player_queen[1] + d[1]] >= 0:
 				next_player_health -= 1
 		if cur_player_health == 0 and next_player_health == 0:
 			np.array([0.1, 0.1], dtype=np.float32)
@@ -455,9 +452,6 @@ class Board():
 		return np.array([[q, r-1], [q+1, r-1],
 						 [q+1, r], [q, r+1],
 						 [q-1, r+1], [q-1, r]], dtype=np.int8)
-	# result = result[_np_all_axis1(result >= 0)]
-	# result = result[_np_all_axis1(result < BOARD_SIZE)]
-	# return result
 
 	def _get_surrounding_pieces(self, q, r):
 		idxs = np.zeros(6, dtype=np.int8)
