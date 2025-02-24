@@ -1,7 +1,7 @@
 from numba import njit
 import numpy as np
 
-BOARD_SIZE = 15
+BOARD_SIZE = 30
 
 PIECE_TYPES_NUM = 2
 PLAYER_PIECES_COUNT = 11
@@ -26,6 +26,7 @@ SPIDER_2 = 10
 #  4 - P - 1
 #   3 / \ 2
 DIRECTIONS = np.array([[1, -1], [1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1]], dtype=np.int8)
+UP_DIRECTION = 6
 DIRECTIONS_STRING = '/-\\/-\\'
 
 @njit(cache=True, fastmath=True, nogil=True)
