@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     game  = HiveGame()
     board = game.getInitBoard()
-    state = "BcEBDgAgCAMxE0F2G/9/r63GQrm2r4pSZ5jARlO0Y8TCi1dn6wM="
+    state = "Y2BABxzsDFjAfyBmAiEA"
     data = zlib.decompress(base64.b64decode(state), wbits=-15)
     board = frombuffer(data[:-3], dtype=int8).reshape(board.shape)
     game.getCanonicalForm(board, 0)

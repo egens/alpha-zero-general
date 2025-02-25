@@ -53,14 +53,7 @@ class GreedyPlayer():
 
         # If there is move to opponent queen make it
         for a in np.where(valids)[0]:
-            piece, to_piece, direction, is_opponent_piece = _decode_action(a)
-            player = 0
-            if player == 1:
-                piece += PLAYER_PIECES_COUNT
-            if is_opponent_piece and player == 0:
-                to_piece = to_piece + PLAYER_PIECES_COUNT
-            if not is_opponent_piece and player == 1:
-                to_piece = to_piece + PLAYER_PIECES_COUNT
+            piece, to_piece, direction, is_opponent_piece = _decode_action(a, 0)
             new_q, new_r = self.game.board.state[to_piece] + DIRECTIONS[direction]
             if self.game.board._near_opponent_queen(0, new_q, new_r):
                 print('NEAR QUEEN')
@@ -68,14 +61,7 @@ class GreedyPlayer():
 
         # If there is move to be closer to opponent queen make it
         for a in np.where(valids)[0]:
-            piece, to_piece, direction, is_opponent_piece = _decode_action(a)
-            player = 0
-            if player == 1:
-                piece += PLAYER_PIECES_COUNT
-            if is_opponent_piece and player == 0:
-                to_piece = to_piece + PLAYER_PIECES_COUNT
-            if not is_opponent_piece and player == 1:
-                to_piece = to_piece + PLAYER_PIECES_COUNT
+            piece, to_piece, direction, is_opponent_piece = _decode_action(a, 0)
             new_q, new_r = self.game.board.state[to_piece] + DIRECTIONS[direction]
             q, r = self.game.board.state[piece]
             if q + r == 0:

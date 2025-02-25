@@ -1,7 +1,7 @@
 from numba import njit
 import numpy as np
 
-BOARD_SIZE = 15
+BOARD_SIZE = 16
 
 PIECE_TYPES_NUM = 2
 PLAYER_PIECES_COUNT = 11
@@ -61,10 +61,18 @@ def _is_spider(p):
 
 # Move to piece actions
 @njit(cache=True, fastmath=True, nogil=True)
-def _decode_action(action):
+def _decode_action(action, player=None):
 	piece, action_ = divmod(action, PLAYER_PIECES_COUNT*6*2)
 	to_piece, action_ = divmod(action_, 6*2)
 	direction, is_opponent_piece = divmod(action_, 2)
+
+	if player == 1:
+		piece += PLAYER_PIECES_COUNT
+	if is_opponent_piece and player == 0:
+		to_piece = to_piece + PLAYER_PIECES_COUNT
+	if not is_opponent_piece and player == 1:
+		to_piece = to_piece + PLAYER_PIECES_COUNT
+
 	return piece, to_piece, direction, is_opponent_piece
 
 @njit(cache=True, fastmath=True, nogil=True)

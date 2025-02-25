@@ -5,13 +5,7 @@ from .HiveConstants import _decode_action, _is_queen, _is_beetle, _is_ant, _is_g
 
 
 def move_to_str(move, player):
-	piece, to_piece, direction, is_opponent_piece = _decode_action(move)
-	if player == 1:
-		piece += PLAYER_PIECES_COUNT
-	if is_opponent_piece and player == 0:
-		to_piece = to_piece + PLAYER_PIECES_COUNT
-	if not is_opponent_piece and player == 1:
-		to_piece = to_piece + PLAYER_PIECES_COUNT
+	piece, to_piece, direction, is_opponent_piece = _decode_action(move, player)
 	# if to_piece == piece:
 	# 	return f'place {_get_char(piece)}'
 	piece = player * PLAYER_PIECES_COUNT + piece
@@ -19,14 +13,14 @@ def move_to_str(move, player):
 
 ############################# PRINT GAME ######################################
 
+
 def _print_main(board):
-	print(f'-'*11)
-	print()
 	l = ''
 	for i in range(BOARD_SIZE):
 		l += str(i) + ' '
 	print(l)
-	for r in range(BOARD_SIZE):
+	flag_lines = __get_flags_lines(board)
+	for i, r in enumerate(range(BOARD_SIZE)):
 		l = ''
 		for q in range(BOARD_SIZE):
 			if r + q == 0:
@@ -36,11 +30,12 @@ def _print_main(board):
 				c = f'{Fore.BLACK}. {Style.RESET_ALL}'
 			else:
 				c = f'{Fore.BLUE}. {Style.RESET_ALL}'
-			for piece, coord in enumerate(board.state[:-1]):
+			for piece, coord in enumerate(board.positions):
 				if coord[0] == q and coord[1] == r:
 					c = _get_char(piece)
 			l += f'{c}'
-		print(r * ' ' + l)
+		left_padding = r * ' '
+		print(left_padding + l + ' ' + flag_lines[i])
 	# input()
 
 def _get_char(piece):
@@ -63,13 +58,7 @@ def _get_char(piece):
 	return f'{fg}{bg}{c}{Style.RESET_ALL}'
 
 def _get_move(move, player):
-	piece, to_piece, direction, is_opponent_piece = _decode_action(move)
-	if player == 1:
-		piece += PLAYER_PIECES_COUNT
-	if is_opponent_piece and player == 0:
-		to_piece = to_piece + PLAYER_PIECES_COUNT
-	if not is_opponent_piece and player == 1:
-		to_piece = to_piece + PLAYER_PIECES_COUNT
+	piece, to_piece, direction, is_opponent_piece = _decode_action(move, player)
 	if direction < 3:
 		return f'{_get_char(to_piece)}{DIRECTIONS_STRING[direction]}'
 	else:
@@ -87,23 +76,31 @@ def _print_flag(flag, c='f'):
 		print(r * ' ' + l)
 
 def _print_flags(board):
-	print(f'-'*11)
+	for l in __get_flags_lines(board):
+		print(l)
+
+def __get_flags_lines(board):
 	spawns = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.bool_)
+	lines = []
 	for s in board._get_spawns(board.get_round() % 2):
 		spawns[s[0], s[1]] = True
 	for r in range(BOARD_SIZE):
 		l = ''
 		for q in range(BOARD_SIZE):
-			if board.pieces[q, r]:
+			if q < (BOARD_SIZE/2 - r - 1) or q > (3/2*BOARD_SIZE - r - 1):
+				l += '  '
+				continue
+			if board.pieces[q, r] >= 0:
 				if board._get_cutpoints()[q, r]:
 					l += f'C '
 				else:
 					l += f'* '
-			# elif spawns[q, r]:
-			# 	l += f's '
+			elif spawns[q, r]:
+				l += f's '
 			else:
 				l += f'. '
-		print(r * ' ' + l)
+		lines += [l]
+	return lines
 
 def _print_moves(board, actions=None):
 	player = board.get_round() % 2
@@ -123,14 +120,13 @@ def _print_moves(board, actions=None):
 
 def _print_hands(board):
 	l = 'Player hands: '
-	for piece, coord in enumerate(board.state[:-1]):
+	for piece, coord in enumerate(board.positions):
 		if coord[0] + coord[1] == 0:
 			l += f'{_get_char(piece)} '
 	print(l)
 
 def print_board(board):
 	print()
-	_print_flags(board)
+	_print_main(board)
 	_print_hands(board)
 	_print_moves(board)
-	_print_main(board)
