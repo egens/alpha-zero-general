@@ -73,23 +73,23 @@ from .HiveDisplay import _print_flag, _print_flags, _print_moves
 
 @njit(cache=True, fastmath=True, nogil=True)
 def observation_size():
-	return (2*PLAYER_PIECES_COUNT + 1,2)
+	return (2*PLAYER_PIECES_COUNT + 1 + 2,2)
 
 @njit(cache=True, fastmath=True, nogil=True)
 def action_size():
 	return MOVES_COUNT
 
-spec = [
-	('state'      , numba.int8[:,:]),
-	('pieces'     , numba.int8[:,:]),
-	('positions'  , numba.int8[:,:]),
-	('round_num'  , numba.int8[:]),
-	('beetle_height'  , numba.int8[:]),
-]
-@numba.experimental.jitclass(spec)
+# spec = [
+# 	('state'      , numba.int8[:,:]),
+# 	('pieces'     , numba.int8[:,:]),
+# 	('positions'  , numba.int8[:,:]),
+# 	('round_num'  , numba.int8[:]),
+# 	('beetle_height'  , numba.int8[:,:]),
+# ]
+# @numba.experimental.jitclass(spec)
 class Board():
 	def __init__(self, num_players):
-		self.state = np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8) # QR coordinates
+		self.state = np.zeros((2*PLAYER_PIECES_COUNT + 1 + 2,2), dtype=np.int8) # QR coordinates
 		self.init_game()
 
 	def get_score(self, player):
@@ -98,12 +98,11 @@ class Board():
 		return 0
 
 	def init_game(self):
-		self.copy_state(np.zeros((2*PLAYER_PIECES_COUNT + 1,2), dtype=np.int8), copy_or_not=False)
+		self.copy_state(np.zeros((2*PLAYER_PIECES_COUNT + 1 + 2,2), dtype=np.int8), copy_or_not=False)
 
+		self.beetle_height[:,:] = -1
 		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8)
 		self.pieces[:,:] = -1
-		self.round_num = np.zeros(2, dtype=np.int8)
-		self.beetle_height = np.zeros(4, dtype=np.int8)
 
 	def get_state(self):
 		return self.state
@@ -123,14 +122,13 @@ class Board():
 			for piece in player_pieces:
 				if piece % PLAYER_PIECES_COUNT not in [GRASSHOPPER_1, SPIDER_1]: # Prohibit first ant or queen or beetle
 					continue
-				to_piece, direction = self._get_first_adj_piece(player, piece, BOARD_SIZE//2 - 1, BOARD_SIZE//2)
+				to_piece, direction = self._get_first_adj_piece(player, piece, BOARD_SIZE//2 + 1, BOARD_SIZE//2)
 				actions[_encode_action(piece, to_piece, direction)] = True
 			return actions
 
-		# On the 4th turn each player must put Q if its in hand
-		if self.get_round() == 6 and self._piece_in_hand(player_pieces[0]):
-			player_pieces = np.array([player_pieces[0]])
-		if self.get_round() == 7 and self._piece_in_hand(player_pieces[0]):
+		# Queen on the 4th move
+		player_pieces_in_play = len(self._pieces_in_play(player))
+		if player_pieces_in_play == 3 and self._piece_in_hand(player_pieces[0]):
 			player_pieces = np.array([player_pieces[0]])
 
 		cutpoints = self._get_cutpoints()
@@ -165,11 +163,12 @@ class Board():
 			else: # Piece in play
 				if cutpoints[self.positions[piece][0], self.positions[piece][1]]:
 					continue
-				# if self._beetle_above(piece):
-				# 	continue
+				if self._beetle_above(piece):
+					continue
 				if self._queen_in_hand(player):
 					continue
-				if _is_queen(piece) or _is_beetle(piece):
+
+				if _is_queen(piece):
 					for i in range(6):
 						q, r = self.positions[piece] + DIRECTIONS[i]
 						if self._is_piece(q, r):
@@ -180,11 +179,21 @@ class Board():
 							moves += [np.array([q, r], dtype=np.int8)]
 						if not self._is_piece(q_prev, r_prev) and self._is_piece(q_next, r_next):
 							moves += [np.array([q, r], dtype=np.int8)]
-				# # Move beetles up
-				# if _is_beetle(piece):
-				# 	for s in self._get_surrounding_pieces(self.state[piece][0], self.state[piece][1]):
-				# 		q, r = s
-				# 		moves += [np.array([q, r], dtype=np.int8)]
+				elif _is_beetle(piece):
+					for i in range(6):
+						q, r = self.positions[piece] + DIRECTIONS[i]
+						if self._is_piece(q, r):
+							continue
+						q_next, r_next = self.positions[piece] + DIRECTIONS[(i + 1) % 6]
+						q_prev, r_prev = self.positions[piece] + DIRECTIONS[(i - 1) % 6]
+						if self._is_piece(q_prev, r_prev) and not self._is_piece(q_next, r_next):
+							moves += [np.array([q, r], dtype=np.int8)]
+						if not self._is_piece(q_prev, r_prev) and self._is_piece(q_next, r_next):
+							moves += [np.array([q, r], dtype=np.int8)]
+					for d in DIRECTIONS:
+						q, r = self.positions[piece] + d
+						if self._is_piece(q, r):
+							moves += [np.array([q, r], dtype=np.int8)]
 				elif _is_ant(piece):
 					moves += self._get_ant_moves(piece)
 				elif _is_grasshopper(piece):
@@ -201,8 +210,6 @@ class Board():
 			for q, r in moves:
 				if self._is_board(q, r):
 					to_piece, direction = self._get_first_adj_piece(player, piece, q, r)
-					# if piece == 3:
-					# 	print(to_piece, direction)
 					actions[_encode_action(piece, to_piece, direction)] = True
 
 		if sum(actions) == 0:
@@ -289,15 +296,22 @@ class Board():
 		new_q, new_r = self.positions[to_piece] + DIRECTIONS[direction]
 		# First move override
 		if to_piece == piece:
-			new_q, new_r = BOARD_SIZE//2, BOARD_SIZE//2 - 1
-		self.positions[piece] = [new_q, new_r]
-		self._check_state()
-		self.pieces[new_q, new_r] = piece
-		# if self.pieces[new_q, new_r] == True:
-		# 	pass
-		# 	# TODO going above the hive
-		return self._get_opponent(player)
+			new_q, new_r = BOARD_SIZE//2, BOARD_SIZE//2
+		if self._is_piece(new_q, new_r) and not _is_beetle(piece):
+			raise Exception('New position should be empty if the piece is not beetle')
+		if _is_beetle(piece):
+			beetle_number = piece % PLAYER_PIECES_COUNT % BEETLE_1
+			piece_below_from = self.state[2*PLAYER_PIECES_COUNT + player, beetle_number]
+			if piece_below_from >= 0:
+				self.pieces[q, r] = piece_below_from
+			if self.pieces[new_q, new_r] >= 0:
+				self.state[2*PLAYER_PIECES_COUNT + player, beetle_number] = self.pieces[new_q, new_r]
+			else: # Nothing below to
+				self.state[2*PLAYER_PIECES_COUNT + player, beetle_number] = -1
 
+		self.positions[piece] = [new_q, new_r]
+		self.pieces[new_q, new_r] = piece
+		return self._get_opponent(player)
 
 	def check_end_game(self, next_player):
 		# Ideally game should be over earlier
@@ -326,13 +340,43 @@ class Board():
 			return
 		# Pieces exchange
 		new_state = self.state.copy()
-		new_state[:PLAYER_PIECES_COUNT], new_state[PLAYER_PIECES_COUNT:-1] = self.state[PLAYER_PIECES_COUNT:-1], self.state[:PLAYER_PIECES_COUNT]
+		new_state[:PLAYER_PIECES_COUNT] = self.state[PLAYER_PIECES_COUNT:2*PLAYER_PIECES_COUNT]
+		new_state[PLAYER_PIECES_COUNT:2*PLAYER_PIECES_COUNT] = self.state[:PLAYER_PIECES_COUNT]
+		# Swap beetles below pieces
+		new_state[2*PLAYER_PIECES_COUNT,:] = self.state[2*PLAYER_PIECES_COUNT + 1,:]
+		new_state[2*PLAYER_PIECES_COUNT + 1,:] = self.state[2*PLAYER_PIECES_COUNT,:]
+		beetles = new_state[2*PLAYER_PIECES_COUNT:2*PLAYER_PIECES_COUNT + 2,:]
+		for (i,j), value in np.ndenumerate(beetles):
+			if value >= 0:
+				beetles[i,j] = (value + PLAYER_PIECES_COUNT) % (2*PLAYER_PIECES_COUNT)
 		self.state = new_state
-		self.positions = self.state[:-1,:]
-		for p in self._pieces_in_play():
-			q, r = self.positions[p]
-			self.pieces[q, r] = p # Positions already swapped
-		a = 1
+		self.positions = self.state[:2*PLAYER_PIECES_COUNT,:]
+		self.round_num = self.state[-1,:]
+		self.beetle_height = self.state[2*PLAYER_PIECES_COUNT:2*PLAYER_PIECES_COUNT+2,:]
+		self._reload_pieces()
+
+	def _reload_pieces(self):
+		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8)
+		self.pieces[:,:] = -1
+		for piece, qr in enumerate(self.positions):
+			if self._piece_in_play(piece) and not _is_beetle(piece):
+				self.pieces[qr[0], qr[1]] = piece
+		# Handle beetles
+		visited = np.array([False, False, False, False], dtype=np.bool_)
+		while not np.all(visited):
+			for i, beetle in enumerate(BEETLES):
+				if visited[i]:
+					continue
+				if self._piece_in_hand(beetle):
+					visited[i] = True
+					continue
+				q, r = self.positions[beetle]
+				beetle_number = beetle % PLAYER_PIECES_COUNT % BEETLE_1
+				player = beetle // PLAYER_PIECES_COUNT
+				piece_below = self.beetle_height[player, beetle_number]
+				if self.pieces[q,r] == piece_below:
+					self.pieces[q,r] = beetle
+					visited[i] = True
 
 	def get_symmetries(self, policy, valid_actions):
 		symmetries = [(self.state.copy(), policy.copy(), valid_actions.copy())]
@@ -356,16 +400,10 @@ class Board():
 			return
 		self.state = state.copy() if copy_or_not else state
 
-		self.positions = self.state[:-1,:]
+		self.positions = self.state[:2*PLAYER_PIECES_COUNT,:]
 		self.round_num = self.state[-1,:]
-
-		self.pieces = np.zeros((BOARD_SIZE,BOARD_SIZE), dtype=np.int8)
-		self.pieces[:,:] = -1
-		for i, qr in enumerate(self.positions):
-			if self._piece_in_play(i):
-				self.pieces[qr[0], qr[1]] = i
-
-	# self.beetle_height = [self.state[-3,0], self.state[-3,1], self.state[-2,0], self.state[-2,1]]
+		self.beetle_height = self.state[2*PLAYER_PIECES_COUNT:2*PLAYER_PIECES_COUNT+2,:]
+		self._reload_pieces()
 
 	def _is_piece(self, q, r):
 		return self._is_board(q, r) and self.pieces[q, r] >= 0
@@ -390,7 +428,7 @@ class Board():
 		return result
 
 	def _get_player_pieces(self, player):
-		return player * PLAYER_PIECES_COUNT + np.arange(PLAYER_PIECES_COUNT)
+		return (player * PLAYER_PIECES_COUNT + np.arange(PLAYER_PIECES_COUNT, dtype=np.int8)).astype(np.int8)
 
 	# players are 0 and 1
 	def _get_opponent(self, player):
@@ -542,3 +580,12 @@ class Board():
 				if np.all(s1 == s2) and sum(s1) + sum(s2) != 0:
 					print(self.state, s1, s2)
 					raise Exception('WRONG STATE')
+
+	def _beetle_above(self, piece):
+		q, r = self.positions[piece]
+		if self.pieces[q,r] != piece:
+			if _is_beetle(self.pieces[q,r]):
+				return True
+			else:
+				Exception('Only beetle can be above')
+		return False

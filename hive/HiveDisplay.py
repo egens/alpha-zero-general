@@ -60,9 +60,9 @@ def _get_char(piece):
 def _get_move(move, player):
 	piece, to_piece, direction, is_opponent_piece = _decode_action(move, player)
 	if direction < 3:
-		return f'{_get_char(to_piece)}{DIRECTIONS_STRING[direction]}'
+		return f'({move}) {_get_char(to_piece)}{DIRECTIONS_STRING[direction]}'
 	else:
-		return f'{DIRECTIONS_STRING[direction]}{_get_char(to_piece)}'
+		return f'({move}) {DIRECTIONS_STRING[direction]}{_get_char(to_piece)}'
 
 def _print_flag(flag, c='f'):
 	print(f'-'*11)
@@ -125,8 +125,22 @@ def _print_hands(board):
 			l += f'{_get_char(piece)} '
 	print(l)
 
+
+def _print_beetles(board):
+	l = 'Beetles:      '
+	for beetle in BEETLES:
+		beetle_number = beetle % PLAYER_PIECES_COUNT % BEETLE_1
+		player = beetle // PLAYER_PIECES_COUNT
+		piece_below = board.beetle_height[player, beetle_number]
+		l += f'{_get_char(beetle)}'
+		if piece_below >= 0:
+			l += f'-{_get_char(piece_below)}'
+		l += ' '
+	print(l)
+
 def print_board(board):
 	print()
 	_print_main(board)
 	_print_hands(board)
+	_print_beetles(board)
 	_print_moves(board)

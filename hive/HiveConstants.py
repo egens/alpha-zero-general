@@ -21,6 +21,8 @@ BEETLE_2 = 8
 SPIDER_1 = 9
 SPIDER_2 = 10
 
+BEETLES = np.array([BEETLE_1, BEETLE_2, BEETLE_1+PLAYER_PIECES_COUNT, BEETLE_2+PLAYER_PIECES_COUNT], dtype=np.int8)
+
 # Directions
 #   5 \ / 0
 #  4 - P - 1

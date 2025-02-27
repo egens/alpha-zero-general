@@ -58,7 +58,8 @@ class HiveGame(Game):
 		return self.board.get_symmetries(np.array(pi, dtype=np.float32), valid_actions)
 
 	def stringRepresentation(self, board):
-		return board.tobytes()
+		# return board.tobytes()
+		return board[:-1,:].tobytes() # remove round num
 
 	def getNumberOfPlayers(self):
 		return NUMBER_PLAYERS
